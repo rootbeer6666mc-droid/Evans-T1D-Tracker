@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>T1D Daily Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f5f5f3;
+    --bg-tertiary: #efefec;
+    --text: #1a1a18;
+    --text-secondary: #6b6b67;
+    --border: rgba(0,0,0,0.12);
+    --border-md: rgba(0,0,0,0.22);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --green: #1D9E75;
+    --green-light: #EAF3DE;
+    --green-dark: #3B6D11;
+    --red: #E24B4A;
+    --red-light: #FCEBEB;
+    --red-dark: #A32D2D;
+    --amber: #BA7517;
+    --amber-light: #FAEEDA;
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --purple: #534AB7;
+    --purple-light: #EEEDFE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg-secondary: #252523;
+      --bg-tertiary: #2e2e2b;
+      --text: #f0ede8;
+      --text-secondary: #9a9890;
+      --border: rgba(255,255,255,0.10);
+      --border-md: rgba(255,255,255,0.20);
+      --green-light: #0d3320;
+      --green-dark: #7fcfab;
+      --red-light: #3a1212;
+      --red-dark: #f09595;
+      --amber-light: #3a2206;
+      --blue-light: #0c2440;
+      --purple-light: #1e1a40;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-tertiary);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 1rem;
+  }
+  .container { max-width: 680px; margin: 0 auto; }
+  .app-header { text-align: center; padding: 1.5rem 0 1rem; }
+  .app-header h1 { font-size: 22px; font-weight: 600; color: var(--text); }
+  .app-header p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+  .tabs { display: flex; gap: 4px; background: var(--bg-secondary); border-radius: var(--radius-lg); padding: 4px; margin-bottom: 1.25rem; }
+  .tab { flex: 1; padding: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--text-secondary); border-radius: var(--radius-md); transition: all 0.15s; }
+  .tab.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+  .section { display: none; }
+  .section.active { display: block; }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row.single { grid-template-columns: 1fr; }
+  .field label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; font-weight: 500; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 8px 10px; font-size: 14px;
+    background: var(--bg-secondary); border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-md); color: var(--text); outline: none;
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--blue); box-shadow: 0 0 0 2px rgba(24,95,165,0.15);
+  }
+  .field textarea { height: 65px; resize: vertical; }
+  .btn-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .btn-primary {
+    background: var(--text); color: var(--bg); border: none;
+    border-radius: var(--radius-md); padding: 9px 22px; font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.82; }
+  .btn-ghost {
+    background: none; border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-md); padding: 9px 16px; font-size: 14px;
+    cursor: pointer; color: var(--text-secondary); font-family: inherit;
+  }
+  .btn-ghost:hover { background: var(--bg-secondary); }
+  .save-msg { text-align: center; color: var(--green); font-size: 13px; font-weight: 500; padding: 6px; display: none; }
+  .log-entry {
+    border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    padding: 12px 14px; margin-bottom: 8px; background: var(--bg);
+  }
+  .log-entry-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .log-time { font-size: 13px; color: var(--text-secondary); }
+  .log-type { font-size: 11px; padding: 3px 9px; border-radius: 5px; font-weight: 600; }
+  .type-bg { background: var(--blue-light); color: var(--blue); }
+  .type-meal { background: var(--green-light); color: var(--green-dark); }
+  .type-bedtime { background: var(--purple-light); color: var(--purple); }
+  .type-bolus { background: var(--amber-light); color: var(--amber); }
+  .type-correction { background: var(--red-light); color: var(--red-dark); }
+  .log-stats { display: flex; flex-wrap: wrap; gap: 14px; }
+  .log-stat { font-size: 13px; color: var(--text-secondary); }
+  .log-stat strong { color: var(--text); }
+  .bg-high { color: var(--red) !important; }
+  .bg-low { color: var(--amber) !important; }
+  .bg-good { color: var(--green) !important; }
+  .delete-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); font-size: 15px; padding: 2px 6px; opacity: 0.45; line-height: 1; }
+  .delete-btn:hover { opacity: 1; color: var(--red); }
+  .empty-state { text-align: center; padding: 2.5rem 1rem; color: var(--text-secondary); font-size: 14px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; }
+  .stat-card { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 12px; }
+  .stat-label { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat-val { font-size: 22px; font-weight: 600; color: var(--text); }
+  .stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .section-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+  .chart-wrap { height: 200px; position: relative; }
+  .date-selector { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
+  .date-selector input[type=date] { flex: 1; }
+  .date-nav {
+    background: var(--bg); border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer;
+    color: var(--text-secondary); font-size: 16px; line-height: 1;
+  }
+  .date-nav:hover { background: var(--bg-secondary); }
+  .tir-bar { height: 12px; border-radius: 6px; background: var(--bg-secondary); overflow: hidden; display: flex; margin: 10px 0 6px; }
+  .tir-low { background: var(--amber); }
+  .tir-in { background: var(--green); }
+  .tir-high { background: var(--red); }
+  .tir-labels { display: flex; justify-content: space-between; font-size: 12px; }
+  .entry-note { font-size: 12px; color: var(--text-secondary); margin-top: 6px; font-style: italic; }
+  @media (max-width: 500px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-row.triple { grid-template-columns: 1fr 1fr; }
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    body { padding: 0.75rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="app-header">
+    <h1>🩸 T1D Daily Tracker</h1>
+    <p>Log blood sugar, insulin, carbs & notes every day.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('log')">Log entry</button>
+    <button class="tab" onclick="showTab('history')">History</button>
+    <button class="tab" onclick="showTab('summary')">Summary</button>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="tab-log" class="section active">
+    <div class="card">
+      <div class="form-row">
+        <div class="field"><label>Date</label><input type="date" id="entry-date" /></div>
+        <div class="field"><label>Time</label><input type="time" id="entry-time" /></div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Reading type</label>
+          <select id="entry-type">
+            <option value="bg">Blood glucose check</option>
+            <option value="meal">Before meal</option>
+            <option value="bedtime">Bedtime</option>
+            <option value="correction">Correction</option>
+            <option value="bolus">Bolus (meal insulin)</option>
+          </select>
+        </div>
+        <div class="field"><label>Blood sugar (mg/dL)</label><input type="number" id="entry-bg" placeholder="e.g. 120" min="20" max="600" /></div>
+      </div>
+      <div class="form-row triple">
+        <div class="field"><label>Bolus insulin (u)</label><input type="number" id="entry-bolus" placeholder="units" min="0" step="0.5" /></div>
+        <div class="field"><label>Basal / long-acting (u)</label><input type="number" id="entry-basal" placeholder="units" min="0" step="0.5" /></div>
+        <div class="field"><label>Carbs (g)</label><input type="number" id="entry-carbs" placeholder="grams" min="0" /></div>
+      </div>
+      <div class="form-row single">
+        <div class="field"><label>Notes</label><textarea id="entry-notes" placeholder="Activity, symptoms, food details, how you're feeling..."></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-ghost" onclick="clearForm()">Clear</button>
+        <button class="btn-primary" onclick="saveEntry()">Save entry</button>
+      </div>
+    </div>
+    <div id="save-msg" class="save-msg">✓ Entry saved!</div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" class="section">
+    <div class="date-selector">
+      <button class="date-nav" onclick="changeDay(-1)">&#8249;</button>
+      <input type="date" id="hist-date" onchange="renderHistory()" />
+      <button class="date-nav" onclick="changeDay(1)">&#8250;</button>
+      <button class="btn-ghost" style="font-size:13px;" onclick="setToday()">Today</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+
+  <!-- SUMMARY TAB -->
+  <div id="tab-summary" class="section">
+    <div class="summary-grid" id="summary-stats"></div>
+    <div class="card">
+      <div class="section-title">Average blood sugar — last 7 days</div>
+      <div class="chart-wrap"><canvas id="bg-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Time in range (last 7 days)</div>
+      <div id="tir-section"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 't1d_tracker_v1';
+let entries = [];
+let bgChart = null;
+
+function loadEntries() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    entries = raw ? JSON.parse(raw) : [];
+  } catch(e) { entries = []; }
+}
+
+function saveEntries() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function nowTime() {
+  const d = new Date();
+  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+
+function init() {
+  document.getElementById('entry-date').value = todayStr();
+  document.getElementById('entry-time').value = nowTime();
+  document.getElementById('hist-date').value = todayStr();
+}
+
+function showTab(name) {
+  ['log','history','summary'].forEach((n,i) => {
+    document.querySelectorAll('.tab')[i].classList.toggle('active', n === name);
+    document.getElementById('tab-'+n).classList.toggle('active', n === name);
+  });
+  if (name === 'history') renderHistory();
+  if (name === 'summary') renderSummary();
+}
+
+function bgClass(v) {
+  if (!v) return '';
+  if (v < 70) return 'bg-low';
+  if (v > 180) return 'bg-high';
+  return 'bg-good';
+}
+
+function typeBadge(type) {
+  const map = {
+    bg: ['Blood glucose','type-bg'],
+    meal: ['Before meal','type-meal'],
+    bedtime: ['Bedtime','type-bedtime'],
+    correction: ['Correction','type-correction'],
+    bolus: ['Bolus','type-bolus']
+  };
+  const [label, cls] = map[type] || ['Check','type-bg'];
+  return `<span class="log-type ${cls}">${label}</span>`;
+}
+
+function saveEntry() {
+  const bg = parseFloat(document.getElementById('entry-bg').value) || null;
+  const bolus = parseFloat(document.getElementById('entry-bolus').value) || null;
+  const basal = parseFloat(document.getElementById('entry-basal').value) || null;
+  const carbs = parseFloat(document.getElementById('entry-carbs').value) || null;
+  const notes = document.getElementById('entry-notes').value.trim();
+  const date = document.getElementById('entry-date').value;
+  const time = document.getElementById('entry-time').value;
+  const type = document.getElementById('entry-type').value;
+  if (!bg && !bolus && !basal && !carbs && !notes) return;
+  entries.push({ id: Date.now(), date, time, type, bg, bolus, basal, carbs, notes });
+  saveEntries();
+  const msg = document.getElementById('save-msg');
+  msg.style.display = 'block';
+  setTimeout(() => msg.style.display = 'none', 2200);
+  document.getElementById('entry-bg').value = '';
+  document.getElementById('entry-bolus').value = '';
+  document.getElementById('entry-basal').value = '';
+  document.getElementById('entry-carbs').value = '';
+  document.getElementById('entry-notes').value = '';
+  document.getElementById('entry-time').value = nowTime();
+}
+
+function clearForm() {
+  ['entry-bg','entry-bolus','entry-basal','entry-carbs','entry-notes'].forEach(id => document.getElementById(id).value = '');
+}
+
+function deleteEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  entries = entries.filter(e => e.id !== id);
+  saveEntries();
+  renderHistory();
+}
+
+function renderHistory() {
+  const d = document.getElementById('hist-date').value;
+  const day = entries.filter(e => e.date === d).sort((a,b) => a.time.localeCompare(b.time));
+  const list = document.getElementById('history-list');
+  if (!day.length) {
+    list.innerHTML = '<div class="empty-state">No entries for this day.<br><span style="font-size:12px;">Go to Log entry to add one.</span></div>';
+    return;
+  }
+  list.innerHTML = day.map(e => `
+    <div class="log-entry">
+      <div class="log-entry-header">
+        <div style="display:flex;align-items:center;gap:8px;">${typeBadge(e.type)}<span class="log-time">${e.time}</span></div>
+        <button class="delete-btn" onclick="deleteEntry(${e.id})" title="Delete entry">&#x2715;</button>
+      </div>
+      <div class="log-stats">
+        ${e.bg ? `<div class="log-stat">BG: <strong class="${bgClass(e.bg)}">${e.bg} mg/dL</strong></div>` : ''}
+        ${e.bolus ? `<div class="log-stat">Bolus: <strong>${e.bolus}u</strong></div>` : ''}
+        ${e.basal ? `<div class="log-stat">Basal: <strong>${e.basal}u</strong></div>` : ''}
+        ${e.carbs ? `<div class="log-stat">Carbs: <strong>${e.carbs}g</strong></div>` : ''}
+      </div>
+      ${e.notes ? `<div class="entry-note">${e.notes}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function changeDay(delta) {
+  const input = document.getElementById('hist-date');
+  const d = new Date(input.value + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  input.value = d.toISOString().slice(0,10);
+  renderHistory();
+}
+
+function setToday() {
+  document.getElementById('hist-date').value = todayStr();
+  renderHistory();
+}
+
+function getLast7Days() {
+  return Array.from({length:7},(_,i) => {
+    const d = new Date(); d.setDate(d.getDate()-(6-i));
+    return d.toISOString().slice(0,10);
+  });
+}
+
+function renderSummary() {
+  const days7 = getLast7Days();
+  const recent = entries.filter(e => days7.includes(e.date));
+  const bgs = recent.filter(e => e.bg).map(e => e.bg);
+  const avg = bgs.length ? Math.round(bgs.reduce((a,b)=>a+b,0)/bgs.length) : null;
+  const totalBolus = recent.reduce((a,e)=>a+(e.bolus||0),0);
+  const totalCarbs = recent.reduce((a,e)=>a+(e.carbs||0),0);
+  const inRange = bgs.filter(v=>v>=70&&v<=180).length;
+  const tirPct = bgs.length ? Math.round(inRange/bgs.length*100) : null;
+
+  document.getElementById('summary-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Avg BG (7d)</div><div class="stat-val">${avg||'–'}</div><div class="stat-sub">mg/dL</div></div>
+    <div class="stat-card"><div class="stat-label">Time in range</div><div class="stat-val">${tirPct!==null?tirPct+'%':'–'}</div><div class="stat-sub">70–180 mg/dL</div></div>
+    <div class="stat-card"><div class="stat-label">Total bolus (7d)</div><div class="stat-val">${totalBolus>0?totalBolus.toFixed(1):'–'}</div><div class="stat-sub">units</div></div>
+    <div class="stat-card"><div class="stat-label">Total carbs (7d)</div><div class="stat-val">${totalCarbs>0?totalCarbs:'–'}</div><div class="stat-sub">grams</div></div>
+  `;
+
+  const dayLabels = days7.map(d => { const p=d.split('-'); return (parseInt(p[1]))+'/'+parseInt(p[2]); });
+  const dayAvgs = days7.map(d => {
+    const vals = entries.filter(e=>e.date===d&&e.bg).map(e=>e.bg);
+    return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
+  });
+
+  if (bgChart) bgChart.destroy();
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+  const tickColor = isDark ? '#9a9890' : '#6b6b67';
+  bgChart = new Chart(document.getElementById('bg-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        label: 'Avg BG',
+        data: dayAvgs,
+        borderColor: '#185FA5',
+        backgroundColor: 'rgba(24,95,165,0.07)',
+        tension: 0.4,
+        pointRadius: 5,
+        pointBackgroundColor: dayAvgs.map(v => v===null?'transparent':v<70?'#BA7517':v>180?'#E24B4A':'#1D9E75'),
+        fill: true,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } }, suggestedMin: 60, suggestedMax: 260 }
+      }
+    }
+  });
+
+  const low = bgs.filter(v=>v<70).length;
+  const high = bgs.filter(v=>v>180).length;
+  const inR = bgs.filter(v=>v>=70&&v<=180).length;
+  const total = bgs.length || 1;
+  document.getElementById('tir-section').innerHTML = bgs.length ? `
+    <div class="tir-bar">
+      <div class="tir-low" style="width:${Math.round(low/total*100)}%"></div>
+      <div class="tir-in" style="width:${Math.round(inR/total*100)}%"></div>
+      <div class="tir-high" style="width:${Math.round(high/total*100)}%"></div>
+    </div>
+    <div class="tir-labels">
+      <span style="color:#BA7517;">Low &lt;70: ${Math.round(low/total*100)}%</span>
+      <span style="color:#1D9E75;">In range: ${Math.round(inR/total*100)}%</span>
+      <span style="color:#E24B4A;">High &gt;180: ${Math.round(high/total*100)}%</span>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--text-secondary);">Based on ${bgs.length} reading${bgs.length!==1?'s':''} in the last 7 days.</div>
+  ` : '<div style="font-size:13px;color:var(--text-secondary);">No blood sugar readings logged in the last 7 days yet.</div>';
+}
+
+loadEntries();
+init();
+</script>
+</body>
+</html>
